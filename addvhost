@@ -1,0 +1,169 @@
+#!/bin/bash
+
+# Default user/group when creating
+# new directories for the web root
+wwwroot_user="username"
+wwwroot_group="group"
+
+# Default paths
+wwwroot="/var/www/"
+apache_path="/etc/apache2"
+
+
+if [ -z $1 ]
+then
+    echo "You must enter the hostname as first argument."
+	echo "Usage: ./addvhost.sh hostname [root folder(optional)]"
+	exit;
+fi
+
+hname="$1"
+
+if [ -z $2 ]
+then
+	publicFolder="public"
+else
+	publicFolder="$2"
+fi
+
+if [ "$hname" == "-v" ]
+then
+	echo "[Add Apache2 Vhost For Lazy People]"
+	echo "Version 0.0000000001 build 1"
+	exit
+fi
+
+# Script variables
+site_available="$apache_path/sites-available/$hname.conf"
+site_enabled="$apache_path/sites-enabled/$hname.conf"
+
+# Create the vhost
+echo -ne "Creating vhost...... "
+if [ -e "$site_available" ]
+then
+	echo "already exists!"
+else
+	# Create the vhost
+	#template="$(cat vhost_template.txt)"
+
+	template=$( cat <<EOF
+<VirtualHost *:80>
+	ServerAdmin webmaster@localhost
+        ServerName $hname
+
+        DocumentRoot /var/www/$hname/$publicFolder
+        <Directory />
+                Options -Indexes +FollowSymLinks
+                AllowOverride All
+        </Directory>
+        <Directory /var/www/$hname/$publicFolder/>
+                Options -Indexes +FollowSymLinks +MultiViews
+                AllowOverride All
+                Order allow,deny
+                allow from all
+        </Directory>
+
+        Redirect 404 /favicon.ico
+        <Location /favicon.ico>
+                ErrorDocument 404 "No favicon"
+        </Location>
+
+        ErrorLog /var/log/$hname-error.log
+
+        # Possible values include: debug, info, notice, warn, error, crit,
+        # alert, emerg.
+        LogLevel warn
+
+        CustomLog /var/log/$hname-access.log combined
+
+</VirtualHost>
+EOF
+)
+
+	template=${template//\$hname/"$hname"}
+	template=${template//\$publicFolder/"$publicFolder"}
+	echo "$template" > "$site_available"
+
+	if [ ! -e "$site_available" ]
+	then
+		echo "failed!"
+		exit
+	fi
+	echo "done!"
+fi
+
+
+
+# Create the webroot folder
+echo -ne "Creating web folder...... "
+if [ -d "$wwwroot$hname" ]
+then
+	echo "already exists!"
+else
+	mkdir -p "$wwwroot$hname/$publicFolder"
+	if [ ! -d "$wwwroot$hname/$publicFolder" ]
+	then
+		echo "failed!"
+		exit
+	fi
+	echo "done!"
+
+	# Change the owner for the new folder
+	echo -ne "Change user/group on web folder......"
+	user_exist="$(id $wwwroot_user 2>/dev/null)"
+	group_exist="$(id $wwwroot_group 2>/dev/null)"
+	allow=1
+	if [ -z "$user_exist" ]
+	then
+		echo "User '$wwwroot_user' not found"
+		allow=0
+	fi
+	if [ -z "$group_exist" ]
+	then
+		echo "Group '$wwwroot_group' not found"
+		allow=0
+	fi
+	if [ "$allow" -eq 1 ]
+	then
+		chown -R "$wwwroot_user":"$wwwroot_group" "$wwwroot$hname"
+		echo "done!"
+	fi
+
+fi
+
+
+# Enable the apache site
+echo -ne "Enabling Apache2 site...... " 
+if [ -e  "$site_enabled" ]
+then
+	echo "already enabled!"
+else
+	cd "$apache_path/sites-available/"
+	dummy="$(a2ensite $hname)"
+	if [ ! -e  "$site_enabled" ]
+	then
+		echo "failed!"
+		exit
+	fi
+	echo "done!"
+fi
+
+
+# Restart apache
+echo -ne "Restarting Apache2...... "
+dummy2="$(apache2ctl graceful)"
+
+if [ ! -z "$dummy2" ]
+then
+	echo "failed!"
+	echo "Error:"
+	echo "$dummy2"
+	exit
+fi
+echo "done!"
+echo " "
+echo "Congratulations!"
+echo "You just successfully created a new vhost!"
+
+exit
+
