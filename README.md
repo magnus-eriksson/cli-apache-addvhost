@@ -1,7 +1,7 @@
 # CLI-tool: Add Apache vhost in one line
 
 This script makes it a bit easier to add a new Apache 2.4+ vhost and document root on Ubuntu.
-It was built as a mean for me to quickly add new sites on my development server.
+It was built as a means for me to quickly add new sites on my development server.
 
 
 ## Installation
